@@ -24,6 +24,7 @@
             text-shadow: 0 0 5px var(--cyan);
         }
 
+        /* Efeito de Scanlines (TV Antiga) */
         body::before {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
@@ -45,24 +46,23 @@
         }
 
         .icon-img { font-size: 40px; filter: drop-shadow(0 0 10px var(--cyan)); }
-        .icon-label { font-size: 11px; margin-top: 5px; background: rgba(0,0,0,0.5); }
+        .icon-label { font-size: 11px; margin-top: 5px; background: rgba(0,0,0,0.5); padding: 2px 5px; }
 
         .window {
-            position: absolute; width: 400px; min-height: 200px;
+            position: absolute; width: 450px; min-height: 250px;
             background: rgba(5, 5, 5, 0.95); border: 1px solid var(--cyan);
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
             display: none; flex-direction: column; z-index: 10;
         }
 
         .window-header {
             background: var(--cyan); color: black; padding: 5px 10px;
             display: flex; justify-content: space-between; font-weight: bold;
-            cursor: move;
-            user-select: none;
+            cursor: move; user-select: none;
         }
 
         .close-btn { cursor: pointer; padding: 0 5px; }
-        .window-content { padding: 15px; overflow-y: auto; color: #fff; font-size: 13px; }
+        .window-content { padding: 15px; overflow-y: auto; color: #fff; font-size: 13px; flex-grow: 1; }
 
         #taskbar {
             position: fixed; bottom: 0; width: 100%; height: 40px;
@@ -82,6 +82,21 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: black; z-index: 10001; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
+        }
+
+        /* Estilos do Output do Terminal */
+        #output div { margin-bottom: 8px; }
+        .log-box {
+            border: 1px solid var(--cyan);
+            padding: 10px;
+            margin-top: 10px;
+            background: rgba(0, 255, 255, 0.05);
+            line-height: 1.4;
+        }
+        .video-link {
+            color: yellow;
+            text-decoration: underline;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -113,14 +128,17 @@
         </div>
     </div>
 
-    <div id="win-terminal" class="window" style="top: 150px; left: 300px;">
+    <div id="win-terminal" class="window" style="top: 150px; left: 300px; width: 550px;">
         <div class="window-header">
             <span>Terminal Maya_v1.0.89</span>
             <span class="close-btn" onclick="closeWindow('win-terminal')">X</span>
         </div>
-        <div class="window-content" style="background: black; height: 250px;">
-            <div id="output">Digite 'check' para ver seu progresso.</div>
-            <input type="text" id="cmd-input" style="background:none; border:none; color:var(--cyan); width:100%; outline:none;" autofocus>
+        <div class="window-content" style="background: black; height: 300px; display: flex; flex-direction: column;">
+            <div id="output" style="flex-grow: 1; overflow-y: auto; margin-bottom: 10px;">Digite 'check' para ver seu progresso ou 'unlock [senha]' para acessar arquivos.</div>
+            <div style="display: flex;">
+                <span style="margin-right: 5px;">></span>
+                <input type="text" id="cmd-input" style="background:none; border:none; color:var(--cyan); width:100%; outline:none; font-family: 'Courier New';" autofocus>
+            </div>
         </div>
     </div>
 
@@ -130,7 +148,10 @@
     </div>
 
     <script>
-        // --- LÓGICA DE SALVAMENTO ---
+        // --- CONFIGURAÇÃO ---
+        const URL_API = "https://script.google.com/macros/s/AKfycbxsAApBQgDvfv654CvDAhP43koW7WzSA1jP-5dTDBC6_wF2IJ9qRhUyBwSz9Sr0elEaWg/exec";
+
+        // --- SISTEMA DE SALVAMENTO ---
         function saveProgress(key, value) {
             let progress = JSON.parse(localStorage.getItem('maya_save') || '{}');
             progress[key] = value;
@@ -143,8 +164,8 @@
                 let win = document.getElementById(id);
                 if (win && progress[id].open) {
                     win.style.display = 'flex';
-                    win.style.left = progress[id].left;
-                    win.style.top = progress[id].top;
+                    win.style.left = progress[id].left || win.style.left;
+                    win.style.top = progress[id].top || win.style.top;
                 }
             }
         }
@@ -172,12 +193,15 @@
                 let win = header.parentElement;
                 let shiftX = event.clientX - win.getBoundingClientRect().left;
                 let shiftY = event.clientY - win.getBoundingClientRect().top;
+                
                 function moveAt(pageX, pageY) {
                     win.style.left = pageX - shiftX + 'px';
                     win.style.top = pageY - shiftY + 'px';
                 }
+                
                 function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
                 document.addEventListener('mousemove', onMouseMove);
+                
                 header.onmouseup = function() {
                     document.removeEventListener('mousemove', onMouseMove);
                     header.onmouseup = null;
@@ -187,39 +211,59 @@
             header.ondragstart = function() { return false; };
         });
 
-        // --- TERMINAL & API ---
-        const URL_API = "https://script.google.com/macros/s/AKfycbxsAApBQgDvfv654CvDAhP43koW7WzSA1jP-5dTDBC6_wF2IJ9qRhUyBwSz9Sr0elEaWg/exec";
-
+        // --- LÓGICA DO TERMINAL ---
         document.getElementById('cmd-input').addEventListener('keypress', async (e) => {
             if(e.key === 'Enter') {
                 let input = e.target.value.trim();
                 let out = document.getElementById('output');
                 
+                // Exibe o comando digitado no terminal
+                out.innerHTML += `<div style="color: #666;">> ${input}</div>`;
+
                 if (input.startsWith("unlock ")) {
                     let senha = input.split(" ")[1];
-                    out.innerHTML += `<div>> Verificando autoridade na Membrana...</div>`;
+                    out.innerHTML += `<div style="color: var(--cyan)">> Sincronizando com a linha temporal...</div>`;
+                    
                     try {
                         const response = await fetch(URL_API, {
                             method: 'POST',
                             body: JSON.stringify({ senha: senha })
                         });
                         const res = await response.json();
+
                         if (res.sucesso) {
-                            out.innerHTML += `<div style="color: #0f0">> ${res.mensagem}</div>`;
-                            out.innerHTML += `<div style="border: 1px solid var(--cyan); padding: 5px; margin-top:5px;">${res.conteudo}</div>`;
-                            saveProgress('fase_0', { concluida: true });
+                            // 1. Mostra o Aviso/Pergunta (Coluna D)
+                            out.innerHTML += `<div style="color: #0f0; margin-top: 5px; font-weight: bold;">> ${res.mensagem}</div>`;
+                            
+                            // 2. Se o tipo for video, cria um link clicável
+                            if (res.tipo === 'video') {
+                                out.innerHTML += `<div>> Arquivo detectado: <a href="${res.conteudo}" target="_blank" class="video-link">ABRIR_REGISTRO_ARKHE.mp4</a></div>`;
+                            } else {
+                                // 3. Se for log comum, mostra o conteúdo (Coluna B) em um quadro
+                                out.innerHTML += `<div class="log-box">${res.conteudo}</div>`;
+                            }
+                            
+                            saveProgress('progress_' + senha, { unlocked: true });
                         } else {
                             out.innerHTML += `<div style="color: #f00">> ${res.mensagem}</div>`;
                         }
                     } catch (error) {
                         out.innerHTML += `<div style="color: #f00">> ERRO CRÍTICO: Falha na conexão com o Limiar.</div>`;
                     }
-                } else if (input === "check") {
-                    out.innerHTML += "<div>> Sincronia: 1.089ª Linha.</div>";
+                } 
+                else if (input === "check") {
+                    out.innerHTML += "<div>> Sistema: M.A.Y.A. OS v1.0.89 em execução.</div>";
+                    out.innerHTML += "<div>> Localização: Fenda da 4ª Parede.</div>";
+                } 
+                else if (input === "limpar") {
+                    out.innerHTML = "<div>Terminal reiniciado.</div>";
+                }
+                else {
+                    out.innerHTML += `<div style="color: #555">> Comando '${input}' não reconhecido pela Membrana.</div>`;
                 }
                 
                 e.target.value = "";
-                out.scrollTop = out.scrollHeight;
+                out.scrollTop = out.scrollHeight; // Auto-scroll
             }
         });
 
@@ -230,7 +274,7 @@
             setInterval(updateClock, 1000);
             setTimeout(() => {
                 document.getElementById('boot-screen').style.display = 'none';
-            }, 2000);
+            }, 2500);
         };
     </script>
 </body>
