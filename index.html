@@ -92,12 +92,24 @@
             margin-top: 10px;
             background: rgba(0, 255, 255, 0.05);
             line-height: 1.4;
+            white-space: pre-line; /* Respeita quebras de linha da planilha */
         }
         .video-link {
             color: yellow;
             text-decoration: underline;
             font-weight: bold;
         }
+        .btn-download {
+            display: inline-block;
+            background: var(--cyan);
+            color: black;
+            padding: 10px 20px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 15px;
+            border-radius: 2px;
+        }
+        .btn-download:hover { background: #fff; }
     </style>
 </head>
 <body>
@@ -114,6 +126,11 @@
         <div class="icon" onclick="openWindow('win-terminal')">
             <div class="icon-img">📟</div>
             <div class="icon-label">TERMINAL</div>
+        </div>
+        
+        <div id="icon-fragmento" class="icon" style="display: none;" onclick="openWindow('win-fragmento')">
+            <div class="icon-img">🗂️</div>
+            <div class="icon-label">FRAGMENTO_01</div>
         </div>
     </div>
 
@@ -142,16 +159,28 @@
         </div>
     </div>
 
+    <div id="win-fragmento" class="window" style="top: 180px; left: 120px; width: 400px;">
+        <div class="window-header">
+            <span>Explorador: /Maya/Recuperados</span>
+            <span class="close-btn" onclick="closeWindow('win-fragmento')">X</span>
+        </div>
+        <div class="window-content" style="text-align: center;">
+            <p style="color: var(--cyan); font-weight: bold;">[ARQUIVO DESCRIPTOGRAFADO]</p>
+            <div style="font-size: 60px; margin: 15px;">📦</div>
+            <p>Evidência_Sincronia_1089.zip</p>
+            <a href="LINK_DO_SEU_ARQUIVO.zip" download class="btn-download">BAIXAR PACOTE DE DADOS</a>
+            <p style="font-size: 10px; margin-top: 15px; color: #666;">Atenção: A extração destes dados pode causar instabilidade na 4ª Parede.</p>
+        </div>
+    </div>
+
     <div id="taskbar">
         <button class="start-btn">MAYA</button>
         <div id="clock">00:00</div>
     </div>
 
     <script>
-        // --- CONFIGURAÇÃO ---
         const URL_API = "https://script.google.com/macros/s/AKfycbxsAApBQgDvfv654CvDAhP43koW7WzSA1jP-5dTDBC6_wF2IJ9qRhUyBwSz9Sr0elEaWg/exec";
 
-        // --- SISTEMA DE SALVAMENTO ---
         function saveProgress(key, value) {
             let progress = JSON.parse(localStorage.getItem('maya_save') || '{}');
             progress[key] = value;
@@ -160,17 +189,19 @@
 
         function loadProgress() {
             let progress = JSON.parse(localStorage.getItem('maya_save') || '{}');
+            
+            // Carrega janelas abertas
             for (let id in progress) {
-                let win = document.getElementById(id);
-                if (win && progress[id].open) {
-                    win.style.display = 'flex';
-                    win.style.left = progress[id].left || win.style.left;
-                    win.style.top = progress[id].top || win.style.top;
+                let el = document.getElementById(id);
+                if (el) {
+                    if (progress[id].open) el.style.display = 'flex';
+                    if (progress[id].visible) el.style.display = 'flex'; // Para o ícone secreto
+                    if (progress[id].left) el.style.left = progress[id].left;
+                    if (progress[id].top) el.style.top = progress[id].top;
                 }
             }
         }
 
-        // --- INTERFACE ---
         function openWindow(id) {
             let win = document.getElementById(id);
             win.style.display = 'flex';
@@ -187,21 +218,17 @@
             document.getElementById('clock').innerText = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
         }
 
-        // --- ARRASTAR JANELAS ---
         document.querySelectorAll('.window-header').forEach(header => {
             header.onmousedown = function(event) {
                 let win = header.parentElement;
                 let shiftX = event.clientX - win.getBoundingClientRect().left;
                 let shiftY = event.clientY - win.getBoundingClientRect().top;
-                
                 function moveAt(pageX, pageY) {
                     win.style.left = pageX - shiftX + 'px';
                     win.style.top = pageY - shiftY + 'px';
                 }
-                
                 function onMouseMove(event) { moveAt(event.pageX, event.pageY); }
                 document.addEventListener('mousemove', onMouseMove);
-                
                 header.onmouseup = function() {
                     document.removeEventListener('mousemove', onMouseMove);
                     header.onmouseup = null;
@@ -211,13 +238,11 @@
             header.ondragstart = function() { return false; };
         });
 
-        // --- LÓGICA DO TERMINAL ---
+        // --- TERMINAL ---
         document.getElementById('cmd-input').addEventListener('keypress', async (e) => {
             if(e.key === 'Enter') {
                 let input = e.target.value.trim();
                 let out = document.getElementById('output');
-                
-                // Exibe o comando digitado no terminal
                 out.innerHTML += `<div style="color: #666;">> ${input}</div>`;
 
                 if (input.startsWith("unlock ")) {
@@ -232,15 +257,19 @@
                         const res = await response.json();
 
                         if (res.sucesso) {
-                            // 1. Mostra o Aviso/Pergunta (Coluna D)
                             out.innerHTML += `<div style="color: #0f0; margin-top: 5px; font-weight: bold;">> ${res.mensagem}</div>`;
                             
-                            // 2. Se o tipo for video, cria um link clicável
                             if (res.tipo === 'video') {
                                 out.innerHTML += `<div>> Arquivo detectado: <a href="${res.conteudo}" target="_blank" class="video-link">ABRIR_REGISTRO_ARKHE.mp4</a></div>`;
                             } else {
-                                // 3. Se for log comum, mostra o conteúdo (Coluna B) em um quadro
                                 out.innerHTML += `<div class="log-box">${res.conteudo}</div>`;
+                            }
+
+                            // GATILHO ESPECIAL PARA O ENIGMA DO VÍDEO
+                            if (senha === "51/49") {
+                                document.getElementById('icon-fragmento').style.display = 'flex';
+                                saveProgress('icon-fragmento', { visible: true });
+                                out.innerHTML += `<div style="color: #fff; background: #c00; padding: 2px 5px; margin-top: 5px;">[ALERTA: Novo arquivo detectado no Desktop]</div>`;
                             }
                             
                             saveProgress('progress_' + senha, { unlocked: true });
@@ -253,28 +282,24 @@
                 } 
                 else if (input === "check") {
                     out.innerHTML += "<div>> Sistema: M.A.Y.A. OS v1.0.89 em execução.</div>";
-                    out.innerHTML += "<div>> Localização: Fenda da 4ª Parede.</div>";
                 } 
                 else if (input === "limpar") {
                     out.innerHTML = "<div>Terminal reiniciado.</div>";
                 }
                 else {
-                    out.innerHTML += `<div style="color: #555">> Comando '${input}' não reconhecido pela Membrana.</div>`;
+                    out.innerHTML += `<div style="color: #555">> Comando '${input}' não reconhecido.</div>`;
                 }
                 
                 e.target.value = "";
-                out.scrollTop = out.scrollHeight; // Auto-scroll
+                out.scrollTop = out.scrollHeight;
             }
         });
 
-        // --- INICIALIZAÇÃO ---
         window.onload = () => {
             loadProgress();
             updateClock();
             setInterval(updateClock, 1000);
-            setTimeout(() => {
-                document.getElementById('boot-screen').style.display = 'none';
-            }, 2500);
+            setTimeout(() => { document.getElementById('boot-screen').style.display = 'none'; }, 2500);
         };
     </script>
 </body>
